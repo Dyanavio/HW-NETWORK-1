@@ -16,60 +16,75 @@ namespace HW_NETWORK_1_CLIENT
             Console.ForegroundColor = ConsoleColor.DarkGreen;
             Console.WriteLine("------ Available convertions ------\n\t-UAH USD\n\t-USD UAH\n\t-USD EUR\n\t-EUR USD\n\t-EUR GBP\n\t-GBP EUR\n\t-SEK UAH\n\t-UAH SEK\n");
             Console.ResetColor();
+            Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
 
+            client.Connect(endPoint);
             while (true)
             {
-                Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-                
                 try
                 {
                     Console.Write("Enter convertion currencies (FROM -> TO)\nFROM('Exit' to exit the program): ");
                     string? fromCurrency = (Console.ReadLine() + ' ').ToUpper();
-                    Console.Write("TO: ");
-                    string? toCurrency = (Console.ReadLine())?.ToUpper().Trim();
                     if (fromCurrency.Trim() == "EXIT")
                     {
+                        client.Shutdown(SocketShutdown.Both);
+                        client.Close();
+
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine("Exiting . . .");
                         Console.ResetColor();
                         break;
                     }
+                    Console.Write("TO: ");
+                    string? toCurrency = (Console.ReadLine())?.ToUpper().Trim();
+
                     if (string.IsNullOrWhiteSpace(fromCurrency) || string.IsNullOrEmpty(toCurrency))
                     {
                         throw new Exception("Currencies cannot be null");
+
                     }
                     if (toCurrency.Length > toLength || fromCurrency.Length > fromLength)
                     {
                         throw new Exception("Currency index is invalid");
                     }
-                    
-                    byte[] fromData = Encoding.UTF8.GetBytes(fromCurrency);
-                    byte[] toData = Encoding.UTF8.GetBytes(toCurrency);
 
-                    client.Connect(endPoint);
-                    client.Send(fromData);
-                    client.Send(toData);
+                    string message = fromCurrency + toCurrency;
+                    byte[] buffer = Encoding.UTF8.GetBytes(message);
 
-                    byte[] buffer = new byte[1024];
+                    client.Send(buffer);
+
+                    byte[] buff = new byte[1024];
                     int size = 0;
                     StringBuilder reply = new StringBuilder();
 
                     do
                     {
-                        size = client.Receive(buffer);
-                        reply.Append(Encoding.UTF8.GetString(buffer, 0, size));
+                        size = client.Receive(buff);
+                        reply.Append(Encoding.UTF8.GetString(buff, 0, size));
                     }
                     while (client.Available > 0);
 
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine(reply + "\n");
-                    Console.ReadKey();
                     Console.ResetColor();
+                    if (reply[reply.Length - 1] == '0')
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkRed;
+                        Console.WriteLine("No more attempts remaining");
+                        Console.ResetColor();
+                        Console.ReadLine();
 
-
-                    client.Shutdown(SocketShutdown.Both);
-                    client.Close();
+                        client.Shutdown(SocketShutdown.Both);
+                        client.Close();
+                        break;
+                    }
+                }
+                catch(SocketException)
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkRed;
+                    Console.WriteLine("You were disconnected from the host");
+                    Console.ResetColor();
                 }
                 catch (Exception ex)
                 {
